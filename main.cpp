@@ -38,7 +38,7 @@ void LOG() {
 	printf("Entities in use:[%d]\n", (sizeof(LIST) / sizeof(LIST[0]) - IN_USE));
 }
 
-entity_t* new_entity(size_t size) {
+entity_t* newEntity(size_t size) {
 	if (LIST[0].ptr == NULL && LIST[0].size == 0) {
 		static virtual_memory_t vm;
 		LIST[0].ptr = vm.heap;
@@ -58,12 +58,12 @@ entity_t* new_entity(size_t size) {
 	return best;
 }
 
-void* w_malloc(size_t size) {
+void* wMalloc(size_t size) {
 	assert((size + HEADER) <= HEAP_SIZE);
 
 	size += HEADER;
 
-	entity_t* e = new_entity(size);
+	entity_t* e = newEntity(size);
 
 	u8* start = e->ptr;
 	u8* user_ptr = start + HEADER;
@@ -79,11 +79,22 @@ void* w_malloc(size_t size) {
 	return user_ptr;
 }
 
-void w_free(void* ptr) {
-	u8* start = (u8*)ptr - HEADER;
+void wFree(void* ptr) {
+	u8* start = static_cast<u8*>(ptr) - HEADER;
 
 	LIST[IN_USE].ptr = &(*start);
-	LIST[IN_USE].size = (u8)*((u8*)ptr - HEADER);
+	LIST[IN_USE].size= static_cast<u8>(*(static_cast<u8*>(ptr) - HEADER));
+
+	u8 index_for_fragmentation = IN_USE;
+	while(index_for_fragmentation > 0 && LIST[index_for_fragmentation].ptr == &(*start)) {
+		index_for_fragmentation--;
+	}
+
+	LIST[index_for_fragmentation].size += LIST[IN_USE].size;
+	LIST[IN_USE].ptr = nullptr;
+
+	IN_USE = index_for_fragmentation;
+
 	IN_USE++;
 	LOG();
 }
@@ -98,9 +109,9 @@ void test() {
 	int* bazz;
 	char* bar;
 
-	foo = static_cast<foo_t*>(w_malloc(sizeof(foo_t)));
-	bar = static_cast<char*>(w_malloc(5));
-	bazz = static_cast<int*>(w_malloc(sizeof(int)));
+	foo = static_cast<foo_t*>(wMalloc(sizeof(foo_t)));
+	bar = static_cast<char*>(wMalloc(5));
+	bazz = static_cast<int*>(wMalloc(sizeof(int)));
 
 	foo->a = 5;
 	foo->b = 10;
@@ -113,10 +124,11 @@ void test() {
 	printf("Address: [%p], data: [%s] \n", bar, bar);
 	printf("Address: [%p], data: [%d] \n", bazz, *bazz);
 
-	w_free(foo);
-	w_free(bar);
+	wFree(foo);
+	wFree(bar);
+	wFree(bazz);
 
-	char* other = static_cast<char*>(w_malloc(95));
+	char* other = static_cast<char*>(wMalloc(100));
 	strcpy(other, "other");
 	printf("Address: [%p], data: [%s] \n", other, other);
 }
